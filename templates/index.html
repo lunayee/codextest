@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ControlSys 控制介面</title>
+    <style>
+        /* 基本的樣式，可以根據需要調整 */
+        .control-panel {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .direction-buttons {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .button-row {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button {
+            width: 100px;
+            height: 50px;
+            font-size: 16px;
+            margin: 5px;
+        }
+
+        .speed-control {
+            margin-top: 20px;
+        }
+
+        .speed-control input {
+            width: 80px;
+            /* 設定 input 的固定寬度 */
+            margin-left: 5px;
+            /* 與前面的 label 保持間距 */
+        }
+
+        .status-display {
+            margin-left: 30px;
+            font-size: 18px;
+        }
+
+        .status-display p {
+            margin: 5px 0;
+        }
+
+        .calibration {
+            margin-top: 30px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            width: 300px;
+        }
+
+        .calibration h2 {
+            margin-top: 0;
+        }
+
+        .calibration div {
+            margin-bottom: 10px;
+        }
+
+        .calibration label {
+            display: inline-block;
+            width: 120px;
+        }
+
+        .calibration input {
+            width: 150px;
+        }
+    </style>
+    <script>
+        function sendCommand(Command) {
+            var speed = parseFloat(document.getElementById('speed').value) || -0.42;
+            var range = parseFloat(document.getElementById('gearstep').value) || 0.01;
+            // 新增參數的值，供 '666' 指令使用
+            var leftSpeed = parseFloat(document.getElementById('fine_left_speed').value) || 0;
+            var leftRudder = parseFloat(document.getElementById('fine_left_rudder').value) || 0;
+            var rightSpeed = parseFloat(document.getElementById('fine_right_speed').value) || 0;
+            var rightRudder = parseFloat(document.getElementById('fine_right_rudder').value) || 0;
+            var acceleration = parseFloat(document.getElementById('acceleration').value) || 0.01;
+            // 新增參數的值，供 '701' 指令使用
+            var autoheading = parseFloat(document.getElementById('rudder-Heading').innerText) || 0;
+            // 設置不同的 body 內容
+            var bodyContent;
+            if (Command === 666) {
+                bodyContent = JSON.stringify({
+                    'Command': Command,
+                    'Left_Speed': leftSpeed,
+                    'Left_Rudder': leftRudder,
+                    'Right_Speed': rightSpeed,
+                    'Right_Rudder': rightRudder,
+                    'Range': acceleration
+                });
+            } else if (Command === 701) {
+                
+                bodyContent = JSON.stringify({
+                    'Command': Command,
+                    'Current_heading': autoheading,
+                    'Speed': speed,
+                    'Range': range
+                });
+            } else {
+                bodyContent = JSON.stringify({
+                    'Command': Command,
+                    'Speed': speed,
+                    'Range': range
+                });
+            }
+
+            fetch('/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: bodyContent,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    addLog(`${JSON.stringify(data)}`);
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    addLog(`錯誤：${error.message}`);
+                });
+        }
+        // 新增日誌到滾動區域
+        function addLog(message) {
+            const logContainer = document.getElementById('log-container');
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(logEntry);
+            // 限制日誌數量
+            if (logContainer.childElementCount > 100) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+            logContainer.scrollTop = logContainer.scrollHeight; // 滾動到底部
+        }
+
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    // 狀態文字
+                    document.getElementById('current-direction').innerText = data.Command;
+                    document.getElementById('current-speed').innerText = data.Speed.toFixed(2);
+                    document.getElementById('voltage-engine0').innerText = data.Voltage.Engine0.toFixed(3);
+                    document.getElementById('voltage-engine1').innerText = data.Voltage.Engine1.toFixed(3);
+                    document.getElementById('voltage-status').innerText = data.Voltage.status;
+                    document.getElementById('voltage-v0').innerText = data.Voltage.rawdata.LPS_L_vol;
+                    document.getElementById('voltage-v1').innerText = data.Voltage.rawdata.LPS_R_vol;
+                    document.getElementById('voltage-EngineSpeed0').innerText = data.Voltage.rawdata0.EngineSpeed;
+                    document.getElementById('voltage-EngineSpeed1').innerText = data.Voltage.rawdata1.EngineSpeed;
+                    document.getElementById('voltage-Engine0_left_gear_status').innerText = data.Voltage.Engine0_left_gear_status;
+                    document.getElementById('voltage-Engine1_right_gear_status').innerText = data.Voltage.Engine1_right_gear_status;
+
+                    document.getElementById('rudder-engine0').innerText = data.RudderAngle.Engine0;
+                    document.getElementById('rudder-engine1').innerText = data.RudderAngle.Engine1;
+                    document.getElementById('rudder-status0').innerText = data.RudderAngle.status0;
+                    document.getElementById('rudder-status1').innerText = data.RudderAngle.status1;
+                    document.getElementById('rudder-rawdata0').innerText = data.RudderAngle.rawdata0.RudderFeedback;
+                    document.getElementById('rudder-rawdata1').innerText = data.RudderAngle.rawdata1.RudderFeedback;
+                    document.getElementById('rudder-Heading').innerText = data.RudderAngle.rawdata0.Heading;
+                    document.getElementById('rudder-Course').innerText = data.RudderAngle.rawdata0.Course;
+
+
+                    // 更新燈號框的顏色
+                    const ledMapping = {
+                        "0": "#ccc", // 預設灰色
+                        "1": "green"  // 開燈綠色
+                    };
+                    document.getElementById('neutral-led').style.backgroundColor = ledMapping[data.Voltage.rawdata.NEUTRAL_LED] || "#ccc";
+                    document.getElementById('active-led').style.backgroundColor = ledMapping[data.Voltage.rawdata.ACTIVE_LED] || "#ccc";
+                    document.getElementById('sync-led').style.backgroundColor = ledMapping[data.Voltage.rawdata.SYNC_LED] || "#ccc";
+
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+        }
+
+        function sendCalibration() {
+            var gear_adj_engine0 = parseFloat(document.getElementById('gear_adj_engine0').value);
+            var gear_adj_engine1 = parseFloat(document.getElementById('gear_adj_engine1').value);
+            var rudder_adj_engine0 = parseFloat(document.getElementById('rudder_adj_engine0').value);
+            var rudder_adj_engine1 = parseFloat(document.getElementById('rudder_adj_engine1').value);
+
+            const bodyContent = JSON.stringify({
+                'gear_adj_engine0': gear_adj_engine0,
+                'gear_adj_engine1': gear_adj_engine1,
+                'rudder_adj_engine0': rudder_adj_engine0,
+                'rudder_adj_engine1': rudder_adj_engine1
+            });
+
+            fetch('/calibrate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: bodyContent,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    addLog(`${bodyContent}`);
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    addLog(`錯誤：${error.message}`);
+                });
+        }
+
+        // 每0.5秒更新一次狀態
+        setInterval(updateStatus, 500);
+
+        // 在頁面加載後立即更新狀態
+        window.onload = updateStatus;
+    </script>
+</head>
+
+<body>
+    <h1>ControlSys 控制介面</h1>
+    <div class="control-panel">
+        <div class="controls">
+            <!-- 方向控制按鈕 -->
+            <div class="direction-buttons">
+                <div class="button-row">
+                    <button onclick="sendCommand(-2)">左上</button>
+                    <button onclick="sendCommand(1)">前進</button>
+                    <button onclick="sendCommand(2)">右上</button>
+                </div>
+                <div class="button-row">
+                    <button onclick="sendCommand(-3)">左轉</button>
+                    <button onclick="sendCommand(0)">停止</button>
+                    <button onclick="sendCommand(3)">右轉</button>
+                </div>
+                <div class="button-row">
+                    <button onclick="sendCommand(-4)">左下</button>
+                    <button onclick="sendCommand(-1)">後退</button>
+                    <button onclick="sendCommand(4)">右下</button>
+                </div>
+                <div>
+                    ---------------------------------
+                </div>
+                <div class="button-row">
+                    <button onclick="sendCommand(-5)">左上平移</button>
+                    <button onclick="sendCommand(1)">前進</button>
+                    <button onclick="sendCommand(5)">右上平移</button>
+                </div>
+                <div class="button-row">
+                    <button onclick="sendCommand(-6)">左平移</button>
+                    <button onclick="sendCommand(0)">停止</button>
+                    <button onclick="sendCommand(6)">右平移</button>
+                </div>
+                <div class="button-row">
+                    <button onclick="sendCommand(-7)">左下平移</button>
+                    <button onclick="sendCommand(-1)">後退</button>
+                    <button onclick="sendCommand(7)">右下平移</button>
+                </div>
+                <div class="button-row">
+                    <button onclick="sendCommand(-9)">左下後退</button>
+                    <button onclick="sendCommand(-8)">逆時針</button>
+                    <button onclick="sendCommand(8)">順時針</button>
+                    <button onclick="sendCommand(-10)">右下後退</button>
+                </div>
+            </div>
+            <!-- 速度控制 -->
+            <div class="speed-control">
+                <label for="speed">速度：</label>
+                <input type="number" id="speed" name="speed" value="1" step="0.1">
+                <label for="gearstep">加速度：</label>
+                <input type="number" id="gearstep" name="gearstep" value="0.01" step="0.05">
+            </div>
+            <!-- 精密控制 -->
+            <div class="calibration">
+                <h2>精密控制</h2>
+                <div>
+                    <label for="fine_left_speed">左引擎速度：</label>
+                    <input type="number" id="fine_left_speed" name="fine_left_speed" step="0.1" value="0">
+                </div>
+                <div>
+                    <label for="fine_left_rudder">左引擎舵角：</label>
+                    <input type="number" id="fine_left_rudder" name="fine_left_rudder" step="1" value="0">
+                </div>
+                <div>
+                    <label for="fine_right_speed">右引擎速度：</label>
+                    <input type="number" id="fine_right_speed" name="fine_right_speed" step="0.1" value="0">
+                </div>
+                <div>
+                    <label for="fine_right_rudder">右引擎舵角：</label>
+                    <input type="number" id="fine_right_rudder" name="fine_right_rudder" step="1" value="0">
+                </div>
+                <div>
+                    <label for="acceleration">加速度：</label>
+                    <input type="number" id="acceleration" name="acceleration" step="0.04" value="0.01">
+                </div>
+                <button onclick="sendCommand(666)">精密控制</button>
+            </div>
+
+            <!-- 校準設定 -->
+            <div class="calibration">
+                <h2>校準設定</h2>
+                <div>
+                    <label for="gear_adj_engine0">引擎0校準值：</label>
+                    <input type="number" id="gear_adj_engine0" name="gear_adj_engine0" step="0.1" value="2.731">
+                </div>
+                <div>
+                    <label for="gear_adj_engine1">引擎1校準值：</label>
+                    <input type="number" id="gear_adj_engine1" name="gear_adj_engine1" step="0.1" value="2.731">
+                </div>
+                <div>
+                    <label for="rudder_adj_engine0">舵機0校準值：</label>
+                    <input type="number" id="rudder_adj_engine0" name="rudder_adj_engine0" step="0.1" value="0">
+                </div>
+                <div>
+                    <label for="rudder_adj_engine1">舵機1校準值：</label>
+                    <input type="number" id="rudder_adj_engine1" name="rudder_adj_engine1" step="0.1" value="0">
+                </div>
+
+                <button onclick="sendCalibration()">應用校準值</button>
+            </div>
+
+        </div>
+        <!-- 狀態顯示 -->
+
+        <div class="status-display">
+            <div class="button-row">
+                <button onclick="sendCommand(900)">連接</button>
+                <button onclick="sendCommand(901)">叫站</button>
+                <button onclick="sendCommand(999)">斷開連結</button>
+            </div>
+            <h2>燈號狀態</h2>
+            <div class="button-row">
+                <div>
+                    <label>空檔燈：</label>
+                    <div id="neutral-led"
+                        style="display: inline-block; width: 30px; height: 30px; border: 2px solid #ccc; background-color: #ccc;">
+                    </div>
+                </div>
+                <div>
+                    <label>叫站燈：</label>
+                    <div id="active-led"
+                        style="display: inline-block; width: 30px; height: 30px; border: 2px solid #ccc; background-color: #ccc;">
+                    </div>
+                </div>
+                <div>
+                    <label>同步燈：</label>
+                    <div id="sync-led"
+                        style="display: inline-block; width: 30px; height: 30px; border: 2px solid #ccc; background-color: #ccc;">
+                    </div>
+                </div>
+            </div>
+
+
+            <h2>當前指令</h2>
+            <p>指令：<span id="current-direction">0</span></p>
+            <p>速度：<span id="current-speed">-0.26</span></p>
+            <h2>電壓</h2>
+            <p>引擎狀態：<span id="voltage-status">0</span></p>
+            <p>引擎0檔位：<span id="voltage-Engine0_left_gear_status">0</span></p>
+            <p>引擎0計算值：<span id="voltage-engine0">0</span> V 實際值 <span id="voltage-v0">0</span> V</p>
+            <p>引擎1檔位：<span id="voltage-Engine1_right_gear_status">0</span></p>
+            <p>引擎1計算值：<span id="voltage-engine1">0</span> V 實際值 <span id="voltage-v1">0</span> V</p>
+            <p>引擎0轉速：<span id="voltage-EngineSpeed0">0</span> RPM</p>
+            <p>引擎1轉速：<span id="voltage-EngineSpeed1">0</span> RPM</p>
+            <h2>舵角</h2>
+            <div class="button-row">
+                <p>Heading：<span id="rudder-Heading">0</span></p>
+                <p>Course：<span id="rudder-Course">0</span></p>
+            </div>
+
+            <p>引擎0狀態：<span id="rudder-status0">0</span></p>
+            <p>引擎1狀態：<span id="rudder-status1">0</span></p>
+            <p>引擎0計算值：<span id="rudder-engine0">0</span> 度 實際值 <span id="rudder-rawdata0">0</span> 度</p>
+            <p>引擎1計算值：<span id="rudder-engine1">0</span> 度 實際值 <span id="rudder-rawdata1">0</span> 度</p>
+            <h2>決策</h2>
+            <div class="button-row">
+                <button onclick="sendCommand(701)">航向保持</button>
+                <button onclick="sendCommand(702)">GPS錨定</button>
+                <button onclick="sendCommand(703)">DP</button>
+                <button onclick="sendCommand(704)">自動靠泊</button>
+            </div>
+        </div>
+        <div class="status-display">
+            <h2>控制日誌</h2>
+            <div id="log-container"
+                style="height: 500px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+                <!-- 日誌項目將動態插入到這裡 -->
+            </div>
+        </div>
+
+    </div>
+</body>
+
+</html>
